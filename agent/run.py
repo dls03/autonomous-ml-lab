@@ -50,20 +50,36 @@ def main():
         "Include a small unittest-based test when suitable. Context:\n"
         + json.dumps(context)
     )
-    result = generate(prompt)
-    changes = result["files"]
-    if not isinstance(changes, list) or len(changes) > 3:
-        raise ValueError("Invalid generated file list")
-
-    validated = []
-    for item in changes:
-        path = target_path(item["path"])
-        content = item["content"]
-        if not isinstance(content, str) or len(content) > 18000:
-            raise ValueError("Invalid generated content")
-        if path.suffix == ".py":
-            compile(content, str(path), "exec")
-        validated.append((path, content))
+    validated = None
+    retry_prompt = prompt
+    for attempt in range(3):
+        try:
+            result = generate(retry_prompt)
+            changes = result["files"]
+            if not isinstance(changes, list) or not 1 <= len(changes) <= 3:
+                raise ValueError("Invalid generated file list")
+            candidate = []
+            for item in changes:
+                path = target_path(item["path"])
+                content = item["content"]
+                if not isinstance(content, str) or len(content) > 18000:
+                    raise ValueError("Invalid generated content")
+                if path.suffix == ".py":
+                    compile(content, str(path), "exec")
+                candidate.append((path, content))
+            validated = candidate
+            break
+        except (SyntaxError, ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
+            print(f"Generation attempt {attempt + 1}/3 rejected: {exc}")
+            retry_prompt = (
+                prompt
+                + "\nYour previous response was invalid: "
+                + str(exc)[:500]
+                + "\nRegenerate all files with valid complete Python syntax. "
+                "Avoid unfinished multiline strings. Return JSON only."
+            )
+    if validated is None:
+        raise RuntimeError("Ollama did not produce valid code after 3 attempts")
     for path, content in validated:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
