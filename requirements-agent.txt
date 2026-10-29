@@ -1,1 +1,1 @@
-pytest>=8,<10
+# Python standard library only. Ollama runs locally.
