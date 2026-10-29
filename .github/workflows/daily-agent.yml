@@ -1,0 +1,45 @@
+name: Daily ML Agent
+on:
+  schedule:
+    - cron: '17 16 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: daily-ml-agent
+  cancel-in-progress: false
+
+jobs:
+  improve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements-agent.txt
+      - name: Generate improvement
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: gpt-5-mini
+        run: python -m agent.run
+      - name: Validate
+        run: |
+          python -m compileall -q projects agent
+          python -m pytest -q
+      - name: Open review PR
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ai-agent/daily-improvements
+          commit-message: 'AI agent: daily ML improvement'
+          title: 'AI agent: daily ML improvement'
+          body: |
+            Automated suggestion. Syntax and repository tests passed.
+            Review the code and run any relevant ML evaluations before merging.
+          add-paths: |
+            projects/**
