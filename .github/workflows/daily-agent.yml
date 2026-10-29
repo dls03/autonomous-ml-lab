@@ -14,32 +14,39 @@ concurrency:
 
 jobs:
   improve:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+    runs-on: [self-hosted, windows, x64, ml-lab]
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: pip install -r requirements-agent.txt
+      - name: Check Ollama
+        shell: pwsh
+        run: |
+          ollama list
+          ollama show llama3.2:3b
       - name: Generate improvement
+        shell: pwsh
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          OPENAI_MODEL: gpt-5-mini
+          OLLAMA_MODEL: llama3.2:3b
         run: python -m agent.run
-      - name: Validate
+      - name: Validate syntax and agent tests
+        shell: pwsh
         run: |
           python -m compileall -q projects agent
-          python -m pytest -q
+          python -m unittest discover -s tests -p "test_*.py"
       - name: Open review PR
         uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           branch: ai-agent/daily-improvements
-          commit-message: 'AI agent: daily ML improvement'
-          title: 'AI agent: daily ML improvement'
+          commit-message: 'Llama agent: daily ML improvement'
+          title: 'Llama agent: daily ML improvement'
           body: |
-            Automated suggestion. Syntax and repository tests passed.
-            Review the code and run any relevant ML evaluations before merging.
+            Generated locally with Ollama Llama. Syntax and agent checks passed.
+            Review all changes before merging. Generated ML code has not been executed.
           add-paths: |
             projects/**
